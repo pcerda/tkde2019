@@ -22,6 +22,7 @@ from dirty_cat import SimilarityEncoder, TargetEncoder
 from dirty_cat.similarity_encoder import get_kmeans_prototypes
 
 import gamma_poisson_factorization
+from fast_hash import ngram_min_hash
 
 CE_HOME = os.environ.get('CE_HOME')
 sys.path.append(os.path.abspath(os.path.join(
@@ -272,11 +273,24 @@ class PretrainedFastText(BaseEstimator, TransformerMixin):
 class MinHashEncoder(BaseEstimator, TransformerMixin):
     """
     minhash method applied to ngram decomposition of strings
+
+    Parameters
+    ----------
+    n_components : integer
+        The number of dimension for each sample
+    ngram_range : tuple (min_n, max_n)
+        The lower and upper boundary of the range of n-values for different
+        n-grams to be extracted. All values of n such that min_n <= n <= max_n
+        will be used.
+    hashing : {'fast_hash', 'murmur_hash'}
+        Hashing function. fast_hash is faster but
+        might have some concern with its entropy
     """
 
-    def __init__(self, n_components, ngram_range=(2, 4)):
+    def __init__(self, n_components, ngram_range=(2, 4), hashing='fast_hash'):
         self.ngram_range = ngram_range
         self.n_components = n_components
+        self.hashing = hashing
 
     def get_unique_ngrams(self, string, ngram_range):
         """
@@ -284,11 +298,11 @@ class MinHashEncoder(BaseEstimator, TransformerMixin):
         """
         spaces = ' '  # * (n // 2 + n % 2)
         string = spaces + " ".join(string.lower().split()) + spaces
-        ngram_list = []
+        ngram_set = set()
         for n in range(ngram_range[0], ngram_range[1] + 1):
             string_list = [string[i:] for i in range(n)]
-            ngram_list += list(set(zip(*string_list)))
-        return ngram_list
+            ngram_set |= set(zip(*string_list))
+        return ngram_set
 
     def minhash(self, string, n_components, ngram_range):
         min_hashes = np.ones(n_components) * np.infty
@@ -302,14 +316,24 @@ class MinHashEncoder(BaseEstimator, TransformerMixin):
             min_hashes = np.minimum(min_hashes, hash_array)
         return min_hashes/(2**32-1)
 
+    def get_hash(self, string):
+        if self.hashing == 'fast_hash':
+            return np.array([ngram_min_hash(string, self.ngram_range, seed)
+                             for seed in range(self.n_components)])
+        elif self.hashing == 'murmur_hash':
+            return self.minhash(
+                    string, n_components=self.n_components,
+                    ngram_range=self.ngram_range)
+        else:
+            raise ValueError("hashing function '{}' undefined".format(self.hashing))
+
     def fit(self, X, y=None):
 
         self.hash_dict = {}
         for i, x in enumerate(X):
             if x not in self.hash_dict:
-                self.hash_dict[x] = self.minhash(
-                    x, n_components=self.n_components,
-                    ngram_range=self.ngram_range)
+                self.hash_dict[x] = self.get_hash(x)
+
         return self
 
     def transform(self, X):
@@ -318,9 +342,7 @@ class MinHashEncoder(BaseEstimator, TransformerMixin):
 
         for i, x in enumerate(X):
             if x not in self.hash_dict:
-                self.hash_dict[x] = self.minhash(
-                    x, n_components=self.n_components,
-                    ngram_range=self.ngram_range)
+                self.hash_dict[x] = self.get_hash(x)
 
         for i, x in enumerate(X):
             X_out[i, :] = self.hash_dict[x]
