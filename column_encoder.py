@@ -16,7 +16,7 @@ from sklearn.decomposition import PCA, LatentDirichletAllocation, NMF, \
 from sklearn.pipeline import Pipeline
 from sklearn.utils import murmurhash3_32, check_random_state
 
-from fastText import load_model
+from fasttext import load_model
 import category_encoders as cat_enc
 from dirty_cat import SimilarityEncoder, TargetEncoder
 from dirty_cat.similarity_encoder import get_kmeans_prototypes
@@ -287,10 +287,13 @@ class MinHashEncoder(BaseEstimator, TransformerMixin):
         might have some concern with its entropy
     """
 
-    def __init__(self, n_components, ngram_range=(2, 4), hashing='fast_hash'):
+    def __init__(self, n_components, ngram_range=(2, 4),
+                 hashing='fast_hash', minmax_hash=False):
         self.ngram_range = ngram_range
         self.n_components = n_components
         self.hashing = hashing
+        self.minmax_hash = minmax_hash
+        self.count = 0
 
     def get_unique_ngrams(self, string, ngram_range):
         """
@@ -318,9 +321,15 @@ class MinHashEncoder(BaseEstimator, TransformerMixin):
 
     def get_hash(self, string):
         if self.hashing == 'fast_hash':
-            return np.array([ngram_min_hash(string, self.ngram_range, seed)
-                             for seed in range(self.n_components)])
+            if self.minmax_hash:
+                assert self.n_components % 2 == 0, "n_components should be even when minmax_hash=1"
+                return np.concatenate([ngram_min_hash(string, self.ngram_range, seed, return_minmax=True)
+                             for seed in range(self.n_components // 2)])
+            else:
+                return np.array([ngram_min_hash(string, self.ngram_range, seed)
+                                for seed in range(self.n_components)])
         elif self.hashing == 'murmur_hash':
+            assert not(self.minmax_hash), "minmax_hash not implemented with murmur_hash"
             return self.minhash(
                     string, n_components=self.n_components,
                     ngram_range=self.ngram_range)
@@ -329,6 +338,7 @@ class MinHashEncoder(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y=None):
 
+        # TODO Parallel run here
         self.hash_dict = {}
         for i, x in enumerate(X):
             if x not in self.hash_dict:
@@ -340,6 +350,7 @@ class MinHashEncoder(BaseEstimator, TransformerMixin):
 
         X_out = np.zeros((len(X), self.n_components))
 
+        # TODO Parallel run here
         for i, x in enumerate(X):
             if x not in self.hash_dict:
                 self.hash_dict[x] = self.get_hash(x)

@@ -18,6 +18,11 @@ The principle is as follows:
 import functools
 import numpy as np
 
+# Precompute to avoid the cost
+# cast to int32 to speedup the min 
+MININT32 = np.int32(-2 ** (32 - 1))
+MAXINT32 = np.int32(2 ** (32 - 1) - 1)
+
 @functools.lru_cache(maxsize=1024)
 def gen_atom(atom_len, dtype_size=32, seed=0):
     """ Generate a random integer atom
@@ -26,8 +31,6 @@ def gen_atom(atom_len, dtype_size=32, seed=0):
     ----------
     atom_len: int
         The length of the atom
-    dtype_size: int, default=32
-        The size of the integer used
     seed: int, default=0
         The seed of the random_number generator
 
@@ -38,12 +41,11 @@ def gen_atom(atom_len, dtype_size=32, seed=0):
         dtype_size=32
     """
     rng = np.random.RandomState(seed)
-    maxint = 2 ** (dtype_size - 1) - 1
-    atom = rng.randint(-maxint, maxint, size=atom_len,
-                       dtype=np.dtype('int%i' % dtype_size))
+    atom = rng.randint(-MAXINT32, MAXINT32, size=atom_len,
+                       dtype=np.dtype('int32'))
     return atom
 
-# @profile
+
 def ngram_min_hash(string, ngram_range=(2, 4), seed=0, return_minmax=False):
     """ Compute the min hash of the ngrams of the string
 
@@ -61,16 +63,15 @@ def ngram_min_hash(string, ngram_range=(2, 4), seed=0, return_minmax=False):
     """
     # Create a numerical 1D array from the string
     array = np.frombuffer(string.encode(), dtype='int8', count=len(string))
-    dtype_size = 32
 
-    max_hash = -np.inf
-    min_hash = np.inf
+    max_hash = MININT32
+    min_hash = MAXINT32
     for atom_len in range(ngram_range[0], ngram_range[1]):
-        atom = gen_atom(atom_len, dtype_size=dtype_size, seed=seed)
+        atom = gen_atom(atom_len, seed=seed)
         # np.correlate is faster than np.convolve
+        # the convolution gives a hash for each ngram
         hashes = np.correlate(array, atom)
-        new_min = hashes.min()
-        min_hash = min(min_hash, new_min)
+        min_hash = min(min_hash, hashes.min())
         if return_minmax:
             max_hash = max(max_hash, hashes.max())
 
