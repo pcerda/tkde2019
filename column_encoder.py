@@ -2,6 +2,7 @@ import os
 import sys
 import numpy as np
 import warnings
+import collections
 
 from scipy.special import logsumexp
 from scipy import sparse
@@ -29,6 +30,29 @@ sys.path.append(os.path.abspath(os.path.join(
     CE_HOME, 'python', 'categorical_encoding')))
 from get_data import get_data_path
 
+class LRUDict:
+    """ dict with limited capacity
+
+    Using LRU eviction, this avoid to memorizz a full dataset"""
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.cache = collections.OrderedDict()
+
+    def __getitem__(self, key):
+        try:
+            value = self.cache.pop(key)
+            self.cache[key] = value
+            return value
+        except KeyError:
+            return -1
+
+    def __setitem__(self, key, value):
+        try:
+            self.cache.pop(key)
+        except KeyError:
+            if len(self.cache) >= self.capacity:
+                self.cache.popitem(last=False)
+        self.cache[key] = value
 
 class OneHotEncoderRemoveOne(OneHotEncoder):
     def __init__(self, n_values=None, categorical_features=None,
@@ -338,12 +362,7 @@ class MinHashEncoder(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y=None):
 
-        # TODO Parallel run here
-        self.hash_dict = {}
-        for i, x in enumerate(X):
-            if x not in self.hash_dict:
-                self.hash_dict[x] = self.get_hash(x)
-
+        self.hash_dict = LRUDict(capacity = 2**10)
         return self
 
     def transform(self, X):
