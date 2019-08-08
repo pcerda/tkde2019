@@ -2,7 +2,6 @@ import os
 import sys
 import numpy as np
 import warnings
-import collections
 
 from scipy.special import logsumexp
 from scipy import sparse
@@ -30,29 +29,6 @@ sys.path.append(os.path.abspath(os.path.join(
     CE_HOME, 'python', 'categorical_encoding')))
 from get_data import get_data_path
 
-class LRUDict:
-    """ dict with limited capacity
-
-    Using LRU eviction, this avoid to memorizz a full dataset"""
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.cache = collections.OrderedDict()
-
-    def __getitem__(self, key):
-        try:
-            value = self.cache.pop(key)
-            self.cache[key] = value
-            return value
-        except KeyError:
-            return -1
-
-    def __setitem__(self, key, value):
-        try:
-            self.cache.pop(key)
-        except KeyError:
-            if len(self.cache) >= self.capacity:
-                self.cache.popitem(last=False)
-        self.cache[key] = value
 
 class OneHotEncoderRemoveOne(OneHotEncoder):
     def __init__(self, n_values=None, categorical_features=None,
@@ -346,23 +322,27 @@ class MinHashEncoder(BaseEstimator, TransformerMixin):
     def get_hash(self, string):
         if self.hashing == 'fast_hash':
             if self.minmax_hash:
-                assert self.n_components % 2 == 0, "n_components should be even when minmax_hash=1"
-                return np.concatenate([ngram_min_hash(string, self.ngram_range, seed, return_minmax=True)
-                             for seed in range(self.n_components // 2)])
+                assert self.n_components % 2 == 0,\
+                       "n_components should be even when minmax_hash=1"
+                return np.concatenate([ngram_min_hash(string, self.ngram_range,
+                                                      seed, return_minmax=True)
+                                      for seed in range(self.n_components//2)])
             else:
                 return np.array([ngram_min_hash(string, self.ngram_range, seed)
                                 for seed in range(self.n_components)])
         elif self.hashing == 'murmur_hash':
-            assert not(self.minmax_hash), "minmax_hash not implemented with murmur_hash"
+            assert not(self.minmax_hash),\
+                   "minmax_hash not implemented with murmur_hash"
             return self.minhash(
                     string, n_components=self.n_components,
                     ngram_range=self.ngram_range)
         else:
-            raise ValueError("hashing function '{}' undefined".format(self.hashing))
+            raise ValueError("hashing function '{}' "
+                             "undefined".format(self.hashing))
 
     def fit(self, X, y=None):
 
-        self.hash_dict = LRUDict(capacity = 2**10)
+        self.hash_dict = LRUDict(capacity=2**10)
         return self
 
     def transform(self, X):
