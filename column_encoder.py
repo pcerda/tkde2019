@@ -26,9 +26,9 @@ from fast_hash import ngram_min_hash
 from utils import LRUDict
 
 CE_HOME = os.environ.get('CE_HOME')
-# sys.path.append(os.path.abspath(os.path.join(
-#     CE_HOME, 'python', 'categorical_encoding')))
-# from get_data import get_data_path
+sys.path.append(os.path.abspath(os.path.join(
+    CE_HOME, 'python', 'categorical_encoding')))
+from get_data import get_data_path
 
 
 class OneHotEncoderRemoveOne(OneHotEncoder):
