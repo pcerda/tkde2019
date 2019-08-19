@@ -24,3 +24,6 @@ class LRUDict:
             if len(self.cache) >= self.capacity:
                 self.cache.popitem(last=False)
         self.cache[key] = value
+
+    def __contains__(self, key):
+        return key in self.cache

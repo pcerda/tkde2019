@@ -23,11 +23,12 @@ from dirty_cat.similarity_encoder import get_kmeans_prototypes
 
 import gamma_poisson_factorization
 from fast_hash import ngram_min_hash
+from utils import LRUDict
 
 CE_HOME = os.environ.get('CE_HOME')
-sys.path.append(os.path.abspath(os.path.join(
-    CE_HOME, 'python', 'categorical_encoding')))
-from get_data import get_data_path
+# sys.path.append(os.path.abspath(os.path.join(
+#     CE_HOME, 'python', 'categorical_encoding')))
+# from get_data import get_data_path
 
 
 class OneHotEncoderRemoveOne(OneHotEncoder):
@@ -282,13 +283,15 @@ class MinHashEncoder(BaseEstimator, TransformerMixin):
         The lower and upper boundary of the range of n-values for different
         n-grams to be extracted. All values of n such that min_n <= n <= max_n
         will be used.
-    hashing : {'fast_hash', 'murmur_hash'}
-        Hashing function. fast_hash is faster but
+    hashing : {'fast', 'murmur'}, default=fast
+        Hashing function. fast is faster but
         might have some concern with its entropy
+    minmax_hash : boolean, default=False
+        if True, return min hash and max hash concatenated
     """
 
     def __init__(self, n_components, ngram_range=(2, 4),
-                 hashing='fast_hash', minmax_hash=False):
+                 hashing='fast', minmax_hash=False):
         self.ngram_range = ngram_range
         self.n_components = n_components
         self.hashing = hashing
@@ -320,25 +323,27 @@ class MinHashEncoder(BaseEstimator, TransformerMixin):
         return min_hashes/(2**32-1)
 
     def get_hash(self, string):
-        if self.hashing == 'fast_hash':
+        if self.hashing == 'fast':
             if self.minmax_hash:
                 assert self.n_components % 2 == 0,\
-                       "n_components should be even when minmax_hash=1"
+                       "n_components should be even when minmax_hash=True"
                 return np.concatenate([ngram_min_hash(string, self.ngram_range,
                                                       seed, return_minmax=True)
                                       for seed in range(self.n_components//2)])
             else:
                 return np.array([ngram_min_hash(string, self.ngram_range, seed)
                                 for seed in range(self.n_components)])
-        elif self.hashing == 'murmur_hash':
+
+        elif self.hashing == 'murmur':
             assert not(self.minmax_hash),\
-                   "minmax_hash not implemented with murmur_hash"
+                   "minmax_hash not implemented with murmur"
             return self.minhash(
                     string, n_components=self.n_components,
                     ngram_range=self.ngram_range)
         else:
-            raise ValueError("hashing function '{}' "
-                             "undefined".format(self.hashing))
+            raise ValueError("hashing function must be 'fast' or"
+                             "'murmur', got '{}'"
+                             "".format(self.hashing))
 
     def fit(self, X, y=None):
 

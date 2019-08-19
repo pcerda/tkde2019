@@ -18,13 +18,13 @@ The principle is as follows:
 import functools
 import numpy as np
 
-# Precompute to avoid the cost
+# Precompute to avoid the cost and
 # cast to int32 to speedup the min 
 MININT32 = np.int32(-2 ** (32 - 1))
 MAXINT32 = np.int32(2 ** (32 - 1) - 1)
 
 @functools.lru_cache(maxsize=1024)
-def gen_atom(atom_len, dtype_size=32, seed=0):
+def gen_atom(atom_len, seed=0):
     """ Generate a random integer atom
 
     Parameters
@@ -37,8 +37,8 @@ def gen_atom(atom_len, dtype_size=32, seed=0):
     Returns
     -------
     atom: 1D array of integers
-        An array of random integers of length atom_len and dtype int32 if
-        dtype_size=32
+        An array of random integers of length atom_len and dtype int32
+        (assuming dtype_size=32)
     """
     rng = np.random.RandomState(seed)
     atom = rng.randint(-MAXINT32, MAXINT32, size=atom_len,
@@ -53,8 +53,9 @@ def ngram_min_hash(string, ngram_range=(2, 4), seed=0, return_minmax=False):
     ----------
     string: str
         String to min-hash
-    ngram_range: list
-        List of ngram sizes to compute hashes for
+    ngram_range: tuple (min_n, max_n)
+        The lower and upper boundary of the range of n-values 
+        for different n-grams to be extracted.
     seed: integer
         Integer used to seed the hashing function
     Return

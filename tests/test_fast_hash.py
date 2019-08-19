@@ -1,4 +1,4 @@
-from fast_hash import ngram_min_hash
+from string_categorical_encoders.fast_hash import ngram_min_hash
 
 
 def test_fast_hash():
